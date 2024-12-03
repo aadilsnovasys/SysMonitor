@@ -49,7 +49,7 @@ jobs:
             if 40 <= cpu_usage <= 60:
                 critical_resources.append(format_output("CPU Usage", cpu_usage))
             
-            if 40 <= memory_usage <= 60:
+            if 2 <= memory_usage <= 7:
                 critical_resources.append(format_output("Memory Usage", memory_usage))
             
             if critical_resources:

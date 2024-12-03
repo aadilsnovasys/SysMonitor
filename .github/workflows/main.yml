@@ -8,67 +8,70 @@ on:
 jobs:
   check-resources:
     runs-on: self-hosted
-    
+
     steps:
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install psutil
-        
-    - name: Check system resources
-      id: resource-check
-      run: |
-        python << 'EOF'
-        import psutil
-        import sys
-        
-        def format_output(usage_type, value):
-            return f"{usage_type}: {value:.1f}%"
-        
-        try:
-            # Get CPU usage percentage (average over 1 second)
-            cpu_usage = psutil.cpu_percent(interval=1)
-            
-            # Get memory usage percentage
-            memory = psutil.virtual_memory()
-            memory_usage = memory.percent
-            
-            # Print current usage for logging
-            print("Current system resource usage:")
-            print(format_output("CPU Usage", cpu_usage))
-            print(format_output("Memory Usage", memory_usage))
-            
-            # Check if usage is in critical interval (40-60%)
-            critical_resources = []
-            
-            if 40 <= cpu_usage <= 60:
-                critical_resources.append(format_output("CPU Usage", cpu_usage))
-            
-            if 40 <= memory_usage <= 60:
-                critical_resources.append(format_output("Memory Usage", memory_usage))
-            
-            if critical_resources:
-                error_message = "Resource usage in critical interval (40-60%):\n"
-                error_message += "\n".join(critical_resources)
-                print(f"::error::{error_message}")
-                sys.exit(1)
-                
-            print("All resources are outside critical interval")
-            sys.exit(0)
-            
-        except Exception as e:
-            print(f"::error::Error monitoring system resources: {str(e)}")
-            sys.exit(1)
-        EOF
-      continue-on-error: true
-      
-    - name: Check step outcome
-      if: steps.resource-check.outcome == 'failure'
-      run: |
-        echo "Resource check failed - Usage in critical interval"
-        exit 1
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install psutil
+
+      - name: Create and run resource check script
+        id: resource-check
+        shell: bash
+        run: |
+          cat > check_resources.py << 'END_SCRIPT'
+          import psutil
+          import sys
+
+          def format_output(usage_type, value):
+              return f"{usage_type}: {value:.1f}%"
+
+          try:
+              # Get CPU usage percentage (average over 1 second)
+              cpu_usage = psutil.cpu_percent(interval=1)
+              
+              # Get memory usage percentage
+              memory = psutil.virtual_memory()
+              memory_usage = memory.percent
+              
+              # Print current usage for logging
+              print("Current system resource usage:")
+              print(format_output("CPU Usage", cpu_usage))
+              print(format_output("Memory Usage", memory_usage))
+              
+              # Check if usage is in critical interval (40-60%)
+              critical_resources = []
+              
+              if 40 <= cpu_usage <= 60:
+                  critical_resources.append(format_output("CPU Usage", cpu_usage))
+              
+              if 40 <= memory_usage <= 60:
+                  critical_resources.append(format_output("Memory Usage", memory_usage))
+              
+              if critical_resources:
+                  error_message = "Resource usage in critical interval (40-60%):\n"
+                  error_message += "\n".join(critical_resources)
+                  print(f"::error::{error_message}")
+                  sys.exit(1)
+                  
+              print("All resources are outside critical interval")
+              sys.exit(0)
+              
+          except Exception as e:
+              print(f"::error::Error monitoring system resources: {str(e)}")
+              sys.exit(1)
+          END_SCRIPT
+
+          python check_resources.py
+        continue-on-error: true
+
+      - name: Check step outcome
+        if: steps.resource-check.outcome == 'failure'
+        run: |
+          echo "Resource check failed - Usage in critical interval"
+          exit 1

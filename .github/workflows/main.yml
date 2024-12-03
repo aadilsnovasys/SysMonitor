@@ -1,0 +1,59 @@
+name: Continuous System Monitoring
+
+on:
+  schedule:
+    - cron: '*/1 * * * *' # Run every minute
+
+jobs:
+  monitor:
+    runs-on: self-hosted  # Specify that it should run on your self-hosted EC2 runner
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Prometheus Exporter
+      uses: prometheus-community/prometheus-github-actions@v1
+      with:
+        args: --web.listen-address=:8080
+
+    - name: Monitor System Usage
+      id: monitor
+      run: |
+        # Initialize counters to track consecutive checks with usage in range
+        cpu_in_range=0
+        memory_in_range=0
+        max_in_range=5 # Maximum number of consecutive checks for alert (5 minutes)
+        
+        # Monitoring loop for CPU and Memory usage
+        for i in {1..5}; do
+          cpu_usage=$(curl -s http://localhost:8080/metrics | grep 'node_cpu_utilization' | awk '{print $2}')
+          memory_usage=$(curl -s http://localhost:8080/metrics | grep 'node_memory_utilization' | awk '{print $2}')
+          
+          echo "CPU Usage: $cpu_usage%"
+          echo "Memory Usage: $memory_usage%"
+
+          # Check if CPU usage is in the range of 40-60%
+          if (( $(echo "$cpu_usage >= 40" | bc -l) && $(echo "$cpu_usage <= 60" | bc -l) )); then
+            cpu_in_range=$((cpu_in_range+1))
+          else
+            cpu_in_range=0
+          fi
+
+          # Check if Memory usage is in the range of 40-60%
+          if (( $(echo "$memory_usage >= 2" | bc -l) && $(echo "$memory_usage <= 8" | bc -l) )); then
+            memory_in_range=$((memory_in_range+1))
+          else
+            memory_in_range=0
+          fi
+
+          # Wait for 1 minute before the next check
+          sleep 60
+        done
+
+        # Trigger alert if usage is in range for more than 5 minutes
+        if (( cpu_in_range >= max_in_range && memory_in_range >= max_in_range )); then
+          echo "ALERT: Both CPU and Memory usage are between 40-60% for 5 consecutive minutes."
+          # Add your alert logic here, such as sending a notification
+        else
+          echo "CPU and/or Memory usage have not stayed within the 40-60% range for 5 minutes."
+        fi
